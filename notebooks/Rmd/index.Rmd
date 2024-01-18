@@ -1,0 +1,13 @@
+---
+title: "EA analyses"
+author: "Lindsay Oliver"
+date: "`r Sys.Date()`"
+output: bookdown::gitbook
+github-repo: https://github.com/loliver4/EA_ImObs_SPINS_SPASD
+description: "EA and ImObs fMRI analyses across SPINS and SPIN-ASD"
+fontsize: 10pt
+monofontoptions: "Scale=0.5"
+classoption: landscape
+---
+
+# The index page
