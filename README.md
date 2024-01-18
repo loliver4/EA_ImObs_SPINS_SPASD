@@ -18,24 +18,24 @@ Project Organization
     │
     ├── notebooks          <- R notebooks for analysis workflow 
     │
-    ├── docs/references    <- Data dictionaries, manuals, and other explanatory materials
+    ├── docs               <- Data dictionaries, manuals, and other explanatory materials
     │
-    ├── paper              <- Manuscript drafts and outputs
-    │   └── figures        <- Generated graphics and figures to be used in reporting
+    ├── paper              <- Manuscript drafts 
+    │
+    ├── results
     │
     ├── PALM               <- PALM (Permutation Analysis of Linear Models) scripts for EA and ImObs tasks
     │
-    ├── code               <- Code for use in this project (bash scripts)
     
     
 
 notebooks:
-quality_control_ImObs_task contains quality control scripts for ImObs data
-quality_control_EA_task contains quality control scripts for EA data
-factor_scores contains scripts to generate the social cognitive mentalizing and simulation factor scores
-ImObs_participant_sample_characteristics contains scripts characterizing the ImObs sample and comparing demographics and social cognitive performance 
-EA_participant_sample_characteristics contains scripts characterizing the EA sample and comparing demographics and social cognitive performance 
-beta_weights_mentalizing_simulation contains scripts for the exploratory transdiagnostic correlations between EA brain activity (beta weights) and social cognitive performance (mentalizing and simulation scores)
+ImObs_MRIQC_and_QC.Rmd - quality control script for ImObs data
+EA_SPIN_ASD_QC.Rmd - quality control script for EA data
+SPIN_ASD_trans_factor_scores.R - script to generate the social cognitive mentalizing and simulation factor scores
+ImObs_participant_characteristics.Rmd - script characterizing the ImObs sample and comparing demographics and social cognitive performance 
+EA_participant_characteristics.Rmd - script characterizing the EA sample and comparing demographics and social cognitive performance 
+beta_weights_mentalizing_simulation.Rmd - script with the exploratory transdiagnostic correlations between EA brain activity (beta weights) and social cognitive performance (mentalizing and simulation scores)
 
 PALM:
 ea_PALM_1_group and imobs_PALM_1_group contain the single group analyses for autism (ASD), SSDs, and TDCs 
@@ -56,7 +56,7 @@ imobs_2_group_cov_age_sex - full task
 neg_imobs_2_group_cov_age_sex - negative valence
 pos_imobs_2_group_cov_age_sex - positive valence
 
-Transdiagnostic analyses - ea_PALM_transdiag and imobs_PALM_transdiag 
+ea_PALM_transdiag and imobs_PALM_transdiag contain transdiagnostic analyses 
 ea_transdiag_NONpmod_mentalizing_cov_age_sex - including mentalizing scores 
 ea_transdiag_NONpmod_simulation_cov_age_sex - including simulation scores
 
