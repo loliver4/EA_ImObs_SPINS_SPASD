@@ -1,0 +1,329 @@
+---
+title: "EA_SPIN_ASD_QC"
+author: "Iska"
+date: '2023-01-03'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries}
+library(dplyr)
+library(glue)
+library(here)
+library(lubridate)
+library(MatchIt)
+library(readr)
+library(stringr)
+library(table1)
+library(tidyr)
+library(tableone)
+library(rstatix) # for shapiro test
+library(ggplot2)
+library(psych) # for fisher's transform??
+library(table1)
+
+```
+
+
+```{r clearing workspace}
+
+rm(list = ls())
+graphics.off()
+
+```
+
+
+```{r importing and setting up dataframes}
+
+# read in data for spins and spasd participants with prisma scans
+# includes QC info for the EA task and imaging
+prisma <- read.csv("SPIN_ASD_quality_control_EA_task_and_imaging.csv")
+
+# read in EA performance spins sample
+ea_spins <- read.csv("spins_behav_EA_prisma_IDs.csv") # using prisma scan ID for participants who were scaned on multiple scanners
+# several spins participants don't have EA data
+
+# read in EA performance spasd sample
+ea_spasd <- read.csv("spasd_behav_EA.csv")
+
+# combine spins and spasd EA performance dataframes
+ea_spin_asd <- rbind(ea_spins,ea_spasd)
+
+# make group names consistent (slight differences in spins and spasd naming)
+ea_spin_asd <- ea_spin_asd %>% 
+  mutate(group = case_when(group == "ssd" ~ "SSD",
+                           group == "Control" ~ "TDC",
+                           group == "control" ~ "TDC",
+                           group == "ASD" ~ "ASD"))
+     
+# import MRIQC data and generate mean framemwise displacement column (avg of 3 EA runs)
+mriqc <- read.csv("mriqc_combined.csv") %>% 
+  mutate(fd_mean_ea = ((fd_mean.emp_run.1_bold+fd_mean.emp_run.2_bold+fd_mean.emp_run.3_bold)/3))
+
+# combine ea_spin_asd data with MRIQC data
+df <- merge(ea_spin_asd, mriqc, by="record_id", all.x=TRUE)
+
+# keep only relevant columns from df
+df <- df %>% 
+  select(record_id, demo_sex_birth, demo_age_study_entry, scanner, group, fd_mean_ea, starts_with("fd_mean.emp"))
+
+# keep only prisma scans (and merge with QC info)
+df2 <- merge(prisma, df, by="record_id", all.x=FALSE)
+
+# remove intermediate dataframes
+rm(ea_spins, ea_spasd, ea_spin_asd, mriqc)
+
+```
+
+
+```{r generating QC fail variables}
+
+# creating new variable for pass/fail FD (pass = < 0.5)
+df2 <- df2 %>% 
+  mutate(`FD_pass_fail` = case_when(fd_mean_ea >= 0.5 ~ "fail", 
+                                    fd_mean_ea < 0.5 ~ "pass",
+                                         TRUE ~ "NA")) %>%   
+# create imaging_FAIL (based on combination of visual QC and FD > 0.5)
+# visual QC = imaging_QC_fail
+# FD = FD_pass_fail
+  mutate(imaging_FAIL = case_when(imaging_QC_fail == 1 | FD_pass_fail == "fail" ~ "1",
+                                  TRUE ~ "0")) %>% 
+ # create missing_data_FAIL (based on combination of missing all or some EA data)
+# missing_all_data
+# missing_one_block
+  mutate(EA_missing_data_FAIL = case_when(missing_all_data == 1 | missing_one_block == 1 ~ "1",
+                                          TRUE ~ "0")) %>% 
+# create EA_no_responses (based on combination of making no responses in 1 or more videos)
+# no_resp_one_vid_only
+# no_resp_twoPlus_vids
+  mutate(EA_no_responses_FAIL = case_when(no_resp_one_vid_only == 1 | no_resp_twoPlus_vids == 1 ~ "1",
+                                          TRUE ~ "0")) %>% 
+# create EA_1_press_multiple_vids_FAIL
+# X2_press_twoPlus_vids
+  mutate(EA_1_press_multiple_vids_FAIL = case_when(X1_press_twoPlus_vids == 1 ~ "1",
+                                                   TRUE ~ "0")) %>% 
+# create EA_circles_FAIL
+# circles_block_fail
+  mutate(EA_circles_FAIL = case_when(circles_block_fail == 1 ~ "1",
+                                     TRUE ~ "0")) %>% 
+# create excluded column
+  mutate(excluded = case_when(excluded == "EXCLUDE" ~ "1",
+                              TRUE ~ "0"))
+
+
+```
+
+
+```{r generate QC fail dataframe - all ages and 35 years and under}
+
+# create QC_FAIL dataframe that will be used to summarize participants who failed and for what reason
+QC_FAIL <- df2 %>% 
+  select(record_id, demo_sex_birth, demo_age_study_entry, scanner, group, excluded, ends_with("_FAIL", ignore.case = FALSE))
+
+# list participants that failed by group (this is FULL sample including participants over 35 years)
+overall_fail_by_group <- QC_FAIL %>% 
+  group_by(group) %>% 
+  count(excluded)
+
+# filter by those who are 35 years and younger
+QC_FAIL_under35y <- QC_FAIL %>% 
+  filter(demo_age_study_entry <= 35)
+
+# list participants that failed by group (35 and under only)
+under35y_fail_by_group <- QC_FAIL_under35y %>% 
+  group_by(group) %>% 
+  count(excluded)
+
+```
+
+
+```{r excluded participants only - 35 years and under sample only}
+
+# create dataframe of participants that were excluded
+excluded_under35y <- QC_FAIL_under35y %>% 
+  filter(excluded == 1)
+
+# convert fail columns to numeric (columns 6-11)
+excluded_under35y <- excluded_under35y %>% 
+  mutate_at(c(6:11), as.numeric)
+
+# generate column of those who failed for more than one reason
+excluded_under35y <- excluded_under35y %>% 
+  mutate(fail_number_reasons = imaging_FAIL + EA_missing_data_FAIL + EA_no_responses_FAIL + EA_1_press_multiple_vids_FAIL + EA_circles_FAIL) 
+
+# those excluded for 1 reason
+excluded_under35y_1_reason <- excluded_under35y %>% 
+  filter(fail_number_reasons == 1)
+
+# those excluded for 2 reasons
+excluded_under35y_2_reason <- excluded_under35y %>% 
+  filter(fail_number_reasons == 2)
+
+# those excluded for 3 reasons
+excluded_under35y_3_reason <- excluded_under35y %>% 
+  filter(fail_number_reasons == 3)
+
+
+```
+
+
+```{r visual imaging QC fail - all ages and 35 years and under}
+
+# ALL AGES - list number of participants in each group that failed imaging QC - with reasons 
+imaging_QC_fail_reasons <- df2 %>%
+  group_by(group) %>% 
+  count(imaging_QC_reason)
+
+
+# Under 35 year only - list number of participants in each group that failed imaging QC - with reasons
+
+# first filter by those who are 35 years and younger
+df2_35_under <- df2 %>% 
+  filter(demo_age_study_entry <= 35)
+
+# then count
+under35_imaging_QC_fail_reasons <- df2_35_under %>%
+  group_by(group) %>% 
+  count(imaging_QC_reason)
+
+```
+
+
+```{r summary tables - excluded for 1 reason}
+
+# age as numeric
+excluded_under35y_1_reason$demo_age_study_entry <- as.numeric(excluded_under35y_1_reason$demo_age_study_entry)
+label(excluded_under35y_1_reason$demo_age_study_entry) <- "Age"
+
+# convert fail columns to factors (columns 6-11)
+excluded_under35y_1_reason <- excluded_under35y_1_reason %>% 
+  mutate_at(c(6:11), as.factor)
+
+glimpse(excluded_under35y_1_reason)
+
+names <- c('demo_sex_birth' ,'scanner', 'imaging_FAIL', 'EA_missing_data_FAIL', 'EA_no_responses_FAIL', 'EA_1_press_multiple_vids_FAIL', 'EA_circles_FAIL')
+excluded_under35y_1_reason[,names] <- lapply(excluded_under35y_1_reason[,names] , factor)
+str(excluded_under35y_1_reason)
+
+
+label(excluded_under35y_1_reason$demo_sex_birth) <- "Sex"
+label(excluded_under35y_1_reason$scanner) <- "Scanner"
+label(excluded_under35y_1_reason$imaging_FAIL) <- "Failed imaging QC"
+label(excluded_under35y_1_reason$EA_missing_data_FAIL) <- "Missing EA data"
+label(excluded_under35y_1_reason$EA_no_responses_FAIL) <- "No responses in EA video(s)"
+label(excluded_under35y_1_reason$EA_1_press_multiple_vids_FAIL) <- "Single response in 2+ videos"
+label(excluded_under35y_1_reason$EA_circles_FAIL) <- "Failed circles task"
+
+# detailing how I want the continuous variables formatted (i.e., with 3 digits, and only showing mean (SD))
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=3), c("",
+        "Mean (SD)"=sprintf("%s (&plusmn; %s)", MEAN, SD)))
+}
+
+# detailing how I want the categorical variables formatted (i.e., with a count, and showing percentages)
+my.render.cat <- function(x) {
+    c("", sapply(stats.default(x), function(y) with(y,
+        sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+excluded_under35y_1_reason_table <- table1(~demo_age_study_entry + demo_sex_birth + scanner + imaging_FAIL + EA_missing_data_FAIL + EA_no_responses_FAIL + EA_1_press_multiple_vids_FAIL + EA_circles_FAIL | group, data=excluded_under35y_1_reason, overall = FALSE, render.continuous=my.render.cont, render.categorical=my.render.cat)
+excluded_under35y_1_reason_table
+
+```
+
+
+
+```{r summary tables - excluded for 2 reasons}
+
+# age as numeric
+excluded_under35y_2_reason$demo_age_study_entry <- as.numeric(excluded_under35y_2_reason$demo_age_study_entry)
+label(excluded_under35y_2_reason$demo_age_study_entry) <- "Age"
+
+# convert fail columns to factors (columns 6-11)
+excluded_under35y_2_reason <- excluded_under35y_2_reason %>% 
+  mutate_at(c(6:11), as.factor)
+
+glimpse(excluded_under35y_2_reason)
+
+names <- c('demo_sex_birth' ,'scanner', 'imaging_FAIL', 'EA_missing_data_FAIL', 'EA_no_responses_FAIL', 'EA_1_press_multiple_vids_FAIL', 'EA_circles_FAIL')
+excluded_under35y_2_reason[,names] <- lapply(excluded_under35y_2_reason[,names] , factor)
+str(excluded_under35y_2_reason)
+
+
+label(excluded_under35y_2_reason$demo_sex_birth) <- "Sex"
+label(excluded_under35y_2_reason$scanner) <- "Scanner"
+label(excluded_under35y_2_reason$imaging_FAIL) <- "Failed imaging QC"
+label(excluded_under35y_2_reason$EA_missing_data_FAIL) <- "Missing EA data"
+label(excluded_under35y_2_reason$EA_no_responses_FAIL) <- "No responses in EA video(s)"
+label(excluded_under35y_2_reason$EA_1_press_multiple_vids_FAIL) <- "Single response in 2+ videos"
+label(excluded_under35y_2_reason$EA_circles_FAIL) <- "Failed circles task"
+
+# detailing how I want the continuous variables formatted (i.e., with 3 digits, and only showing mean (SD))
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=3), c("",
+        "Mean (SD)"=sprintf("%s (&plusmn; %s)", MEAN, SD)))
+}
+
+# detailing how I want the categorical variables formatted (i.e., with a count, and showing percentages)
+my.render.cat <- function(x) {
+    c("", sapply(stats.default(x), function(y) with(y,
+        sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+excluded_under35y_2_reason_table <- table1(~demo_age_study_entry + demo_sex_birth + scanner + imaging_FAIL + EA_missing_data_FAIL + EA_no_responses_FAIL + EA_1_press_multiple_vids_FAIL + EA_circles_FAIL | group, data=excluded_under35y_2_reason, overall = FALSE, render.continuous=my.render.cont, render.categorical=my.render.cat)
+excluded_under35y_2_reason_table
+
+```
+
+
+
+```{r summary tables - excluded for 3 reasons}
+
+# age as numeric
+excluded_under35y_3_reason$demo_age_study_entry <- as.numeric(excluded_under35y_3_reason$demo_age_study_entry)
+label(excluded_under35y_3_reason$demo_age_study_entry) <- "Age"
+
+# convert fail columns to factors (columns 6-11)
+excluded_under35y_3_reason <- excluded_under35y_3_reason %>% 
+  mutate_at(c(6:11), as.factor)
+
+glimpse(excluded_under35y_3_reason)
+
+names <- c('demo_sex_birth' ,'scanner', 'imaging_FAIL', 'EA_missing_data_FAIL', 'EA_no_responses_FAIL', 'EA_1_press_multiple_vids_FAIL', 'EA_circles_FAIL')
+excluded_under35y_3_reason[,names] <- lapply(excluded_under35y_3_reason[,names] , factor)
+str(excluded_under35y_3_reason)
+
+
+label(excluded_under35y_3_reason$demo_sex_birth) <- "Sex"
+label(excluded_under35y_3_reason$scanner) <- "Scanner"
+label(excluded_under35y_3_reason$imaging_FAIL) <- "Failed imaging QC"
+label(excluded_under35y_3_reason$EA_missing_data_FAIL) <- "Missing EA data"
+label(excluded_under35y_3_reason$EA_no_responses_FAIL) <- "No responses in EA video(s)"
+label(excluded_under35y_3_reason$EA_1_press_multiple_vids_FAIL) <- "Single response in 2+ videos"
+label(excluded_under35y_3_reason$EA_circles_FAIL) <- "Failed circles task"
+
+# detailing how I want the continuous variables formatted (i.e., with 3 digits, and only showing mean (SD))
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=3), c("",
+        "Mean (SD)"=sprintf("%s (&plusmn; %s)", MEAN, SD)))
+}
+
+# detailing how I want the categorical variables formatted (i.e., with a count, and showing percentages)
+my.render.cat <- function(x) {
+    c("", sapply(stats.default(x), function(y) with(y,
+        sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+excluded_under35y_3_reason_table <- table1(~demo_age_study_entry + demo_sex_birth + scanner + imaging_FAIL + EA_missing_data_FAIL + EA_no_responses_FAIL + EA_1_press_multiple_vids_FAIL + EA_circles_FAIL | group, data=excluded_under35y_3_reason, overall = FALSE, render.continuous=my.render.cont, render.categorical=my.render.cat)
+excluded_under35y_3_reason_table
+
+```
+
+
+
+
+
+

@@ -1,0 +1,223 @@
+---
+title: "ImObs_MRIQC_and_QC"
+author: "Iska"
+date: '2022-01-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries}
+library(dplyr)
+library(ggplot2)
+library(glue)
+library(here)
+library(lubridate)
+library(plotly)
+library(readr)
+library(stringr)
+library(table1)
+library(tidyr)
+library(rstatix)
+library(tableone)
+
+```
+
+```{r}
+
+# mriqc data was taken from: /archive/data/SPASD/pipelines/bids_apps/mriqc/group_bold.tsv
+mriqc <- read_tsv("SPASD_group_bold.tsv") #mriqc data for SPASD, from the archive
+#mriqc <- read_tsv("SPASD_group_bold_26Jan2022.tsv") # complete mriqc for SPASD - from Michaels'scratch (naming is  different though, so will need to change the script below to incorporate - or maybe wait for Michael to do a git diff before I do...)
+SPINS_fd_by_run <- read.csv("SPINS_fd_by_run_12-14-2020.csv")
+
+```
+
+```{r MRIQC metrics from SPASD}
+
+# I need to transpose the dataframe, so that there is only one participant per row (currently repeated 6 times for each participant)
+
+# create a new column called record_id, and populate it with the subject ID portion from the bids_name column
+mriqc$record_id <- paste("SPASD", substring(mriqc$bids_name,5,7), substring(mriqc$bids_name,8,11), sep = "_")
+
+# create a new column called SORT - this is what I'm going to sort by
+mriqc$sort <- substring(mriqc$bids_name,25,38)
+
+mriqc <- mriqc %>%
+    pivot_wider(names_from = sort, values_from = fd_mean)
+
+mriqc_keep <- dplyr::select(mriqc, "record_id", "emp_run-1_bold", "emp_run-2_bold", "emp_run-3_bold", "imi_bold", "obs_bold", "rest_bold")
+
+mriqc_keep <- mriqc_keep %>%
+  group_by(record_id) 
+
+mriqc_emp_run1 <- dplyr::select(mriqc_keep, "emp_run-1_bold")
+mriqc_emp_run1 <- na.omit(mriqc_emp_run1) 
+
+mriqc_emp_run2 <- dplyr::select(mriqc_keep, "emp_run-2_bold")
+mriqc_emp_run2 <- na.omit(mriqc_emp_run2) 
+
+mriqc_emp_run3 <- dplyr::select(mriqc_keep, "emp_run-3_bold")
+mriqc_emp_run3 <- na.omit(mriqc_emp_run3) 
+
+mriqc_imi <- dplyr::select(mriqc_keep, "imi_bold")
+mriqc_imi <- na.omit(mriqc_imi)
+
+mriqc_obs <- dplyr::select(mriqc_keep, "obs_bold")
+mriqc_obs <- na.omit(mriqc_obs) 
+
+mriqc_rest <- dplyr::select(mriqc_keep, "rest_bold")
+mriqc_rest <- na.omit(mriqc_rest)
+
+fj <- full_join(mriqc_emp_run1, mriqc_emp_run2, by = "record_id")
+fj_1 <- full_join(fj, mriqc_emp_run3, by = "record_id")
+fj_2 <- full_join(fj_1, mriqc_imi, by="record_id")
+fj_3 <- full_join(fj_2, mriqc_obs, by="record_id")
+fj_4 <- full_join(fj_3, mriqc_rest, by="record_id")
+
+# rename the column names to match Lindsay's dataframe
+colnames(fj_4) <-paste("fd_mean",colnames(fj_4),sep=".")
+fj_4
+SPASD_fd_by_run <- rename(fj_4, record_id = fd_mean.record_id)
+ 
+```
+
+
+```{r combining lindsay and my mriqc data}
+
+#  drop the unnecessary columns from linday's mriqc doc
+SPINS_fd_by_run <- subset(SPINS_fd_by_run, select = -c(fd_mean.rest_run.1_bold,fd_mean.rest_run.2_bold,fd_mean.emp_bold) )
+# rename a couple of the variables to match my dataframe
+SPINS_fd_by_run = rename(SPINS_fd_by_run, "fd_mean.emp_run-1_bold" = fd_mean.emp_run.1_bold)
+SPINS_fd_by_run = rename(SPINS_fd_by_run, "fd_mean.emp_run-2_bold" = fd_mean.emp_run.2_bold)
+SPINS_fd_by_run = rename(SPINS_fd_by_run, "fd_mean.emp_run-3_bold" = fd_mean.emp_run.3_bold)
+
+# merge my mriqc dataframe dataframe with lindsay's
+ALL_fd_by_run <- dplyr::bind_rows(SPASD_fd_by_run,SPINS_fd_by_run)
+
+```
+
+
+
+```{r MRIQC for newer participants}
+
+# re-import the dataset as CSV now
+all_FD_by_run <- read.csv("mriqc_12pt_add_Feb22.csv", stringsAsFactors = FALSE)
+
+# create mean framewise displacement across imi and obs
+all_FD_by_run <- all_FD_by_run %>%
+mutate(fd_mean_imobs = ((fd_mean.imi_bold+fd_mean.obs_bold)/2))
+
+```
+
+
+
+```{r copied from social_cog_wrangling_Nov2021.rmd}
+
+# matched sample
+matched_prisma_df <- read.csv("new_matched_prisma.csv", stringsAsFactors = FALSE)
+
+# EA performance spins and spasd samples
+ea_spins <- read.csv("spins_behav_EA_updated_IDs.csv")
+ea_spasd <- read.csv("spasd_behav_EA.csv")
+
+#combine spins and spasd dfs
+ea_combine_df <- rbind(ea_spins,ea_spasd)
+
+# crude way matching all columns (end up with duplicates, but workds for now )
+# manually remove group and demo_sex_birth from the ea_combine dataframe, so it doesn't duplicate when merged, but kinda hacky
+df <- subset(ea_combine_df, select = -c(group,demo_sex_birth) )
+# then merge with matched prisma data
+matched_prisma_df <- merge(matched_prisma_df, df, by="record_id", all.x=TRUE)
+
+# combined social cog data (RMET, IRI, ER40, TASIT)
+soc_cog <- read.csv("social_cog_combined_df.csv", stringsAsFactors = FALSE)
+
+df1 <- subset(soc_cog, select = -c(study, group))
+matched_prisma_df <- merge(matched_prisma_df, df1, by="record_id", all.x=TRUE)
+
+
+```
+
+
+```{r find those in the ALL_fd_by_run that correspond to matched_prisma_df}
+
+FD_matched_prisma_df <- merge(matched_prisma_df, all_FD_by_run, by="record_id", all.x=TRUE)
+
+```
+
+
+```{r filtering for >0.5 FWD on imitate and observe tasks}
+
+# how many participants are excluded based on 0.5 FWD from imitate task
+FD_exclude_imitate <- FD_matched_prisma_df %>% filter_at(vars(starts_with("fd_mean.imi")), any_vars(. > 0.5)) # 9 for now, mostly SSDs
+FD_exclude_observe <- FD_matched_prisma_df %>% filter_at(vars(starts_with("fd_mean.obs")), any_vars(. > 0.5)) # 1 ASD
+
+# create new column with pass/fail imitate, observe and both
+# imitate
+FD_matched_prisma_df <- FD_matched_prisma_df %>%
+  mutate(imi_FD_pass = case_when(
+    fd_mean.imi_bold < 0.5 ~ "Pass" ,
+    fd_mean.imi_bold > 0.5 ~ "Fail"))
+
+# observe
+FD_matched_prisma_df <- FD_matched_prisma_df %>%
+  mutate(obs_FD_pass = case_when(
+    fd_mean.obs_bold < 0.5 ~ "Pass" ,
+    fd_mean.obs_bold > 0.5 ~ "Fail"))
+
+# either imitate or observe pass
+FD_matched_prisma_df <- FD_matched_prisma_df %>%
+  mutate(imi_obs_FD_pass = case_when(
+    fd_mean.obs_bold < 0.5 & fd_mean.imi_bold < 0.5 ~ "Pass both" ,
+    fd_mean.obs_bold > 0.5 | fd_mean.imi_bold > 0.5~ "Fail either"))
+
+```
+
+
+```{r writing csvs for other R scripts}
+
+#write.csv(FD_matched_prisma_df, "ImObs_for_PALM.csv", row.names = FALSE )
+#write.csv(FD_matched_prisma_df, "ImObs_participant_df.csv", row.names = FALSE )
+
+```
+
+
+```{r table summarizing pass/fail imitate observe task}
+
+label(FD_matched_prisma_df$demo_age) <- "Age (years)"
+
+names <- c('demo_sex_recode' ,'imi_FD_pass', 'obs_FD_pass', 'imi_obs_FD_pass')
+FD_matched_prisma_df[,names] <- lapply(FD_matched_prisma_df[,names] , factor)
+str(FD_matched_prisma_df)
+
+label(FD_matched_prisma_df$demo_sex_recode) <- "Sex"
+label(FD_matched_prisma_df$imi_FD_pass) <- "Imitate FWD"
+label(FD_matched_prisma_df$obs_FD_pass) <- "Observe FWD"
+label(FD_matched_prisma_df$imi_obs_FD_pass) <- "Imitate & Observe FWD"
+
+# detailing how I want the continuous variables formatted (i.e., with 3 digits, and only showing mean (SD))
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=3), c("",
+        "Mean (SD)"=sprintf("%s (&plusmn; %s)", MEAN, SD)))
+}
+
+# detailing how I want the categorical variables formatted (i.e., with a count, and showing percentages)
+my.render.cat <- function(x) {
+    c("", sapply(stats.default(x), function(y) with(y,
+        sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+IMOBS_QC_table <- table1(~demo_age + demo_sex_recode + imi_FD_pass + obs_FD_pass + imi_obs_FD_pass | group, data=FD_matched_prisma_df, overall = "All participants", render.continuous=my.render.cont, render.categorical=my.render.cat)
+IMOBS_QC_table
+
+#IMOBS_QC_table_with_medians <- table1(~demo_age + demo_sex_birth + imi_FD_pass + obs_FD_pass + imi_obs_FD_pass | group, data=FD_matched_prisma_df, overall = TRUE)
+#IMOBS_QC_table_with_medians
+
+
+
+```
+
+
+

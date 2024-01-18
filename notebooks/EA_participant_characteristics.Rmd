@@ -1,0 +1,1306 @@
+---
+title: "EA_participant_characteristics"
+author: "Iska and Lindsay"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- This report is used to combine data from the SPINS and SPIN-ASD studies and identify a matched sample of controls and participants with ASD and SSD
+- Then analysis on the fMRI empathic accuracy task data
+
+```{r load_libraries}
+library(dplyr)
+library(glue)
+library(here)
+library(lubridate)
+library(MatchIt)
+library(readr)
+library(stringr)
+library(table1)
+library(tidyr)
+library(tableone)
+library(rstatix) 
+library(ggplot2)
+library(psych) 
+library(emmeans)
+library(olsrr)  
+library(gvlma)
+
+```
+
+
+```{r import datasets}
+
+# matched sample
+matched_prisma_df <- read.csv("new_matched_prisma.csv", stringsAsFactors = FALSE)
+
+# EA performance spins and spasd samples
+ea_spins <- read.csv("spins_behav_EA_updated_IDs.csv")
+ea_spasd <- read.csv("spasd_behav_EA.csv")
+
+#combine spins and spasd dfs
+ea_combine_df <- rbind(ea_spins,ea_spasd)
+
+df <- subset(ea_combine_df, select = -c(group,demo_sex_birth) )
+# then merge with matched prisma data
+matched_prisma_df <- merge(matched_prisma_df, df, by="record_id", all.x=TRUE)
+
+# combined social cog data (RMET, IRI, ER40, TASIT)
+soc_cog <- read.csv("social_cog_combined_df_Nov2021.csv", stringsAsFactors = FALSE)
+
+df1 <- subset(soc_cog, select = -c(study, group))
+matched_prisma_df <- merge(matched_prisma_df, df1, by="record_id", all.x=TRUE)
+
+#write.csv(matched_prisma_df, "matched_prisma_df.csv", row.names = FALSE )
+
+matched_prisma_df$group <- as.factor(matched_prisma_df$group)
+
+```
+ 
+
+```{r adding framewise displacement data}
+
+ALL_fd_by_run_hacky <- read.csv("mriqc_12pt_add_Feb22.csv", stringsAsFactors = FALSE)
+# match those in the EA dataframe with factor score data: 
+matched_prisma_df <- merge(matched_prisma_df, ALL_fd_by_run_hacky, by="record_id", all.x=TRUE)
+
+# create mean framewise displacement across the three EA runs
+matched_prisma_df <- matched_prisma_df %>%
+mutate(fd_mean_ea = ((fd_mean.emp_run.1_bold+fd_mean.emp_run.2_bold+fd_mean.emp_run.3_bold)/3))
+
+```
+
+
+```{r adding factor score data}
+
+#CSV with factor score for all participants
+factor_score <- read.csv("soc_cog_factor_scores_08-03-2022.csv")
+
+# remove group from this dataframe, as it's a duplicate and will cause issues
+factor_score <- subset(factor_score, select = -c(group) )
+
+# match those in the EA dataframe with factor score data: 
+matched_prisma_df <- merge(matched_prisma_df, factor_score, by="record_id", all.x=TRUE)
+
+
+# creating a table to summarize the factor score data (just to have a look)
+
+# detailing how I want the continuous variables formatted (i.e., with 3 digits, and only showing mean (SD))
+my.render.cont <- function(x) {
+    with(stats.apply.rounding(stats.default(x), digits=3), c("",
+        "Mean (SD)"=sprintf("%s (&plusmn; %s)", MEAN, SD)))
+}
+
+# detailing how I want the categorical variables formatted (i.e., with a count, and showing percentages)
+my.render.cat <- function(x) {
+    c("", sapply(stats.default(x), function(y) with(y,
+        sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ simulation + mentalizing + soccog1fac | group,
+       data = matched_prisma_df,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+
+```
+
+Checking normality of data (just putting here for now - summary of what is embedded below)
+
+IRI: variables normal / model residuals normal & model assumptions acceptable - LEAVE OUT FOR NOW (only one normal)
+
+RMET: variables non-normal / model residuals non-normal & model assumptions not met
+ER-40: variables non-normal / model residuals non-normal & model assumptions not met
+
+TASIT 1: variables non-normal / model residuals non-normal & model assumptions not met
+TASIT 2: variables non-normal / model residuals non-normal & model assumptions not met
+TASIT 3 lies: variables non-normal / model residuals non-normal & model assumptions not met
+TASIT 3 sarcasm: variables non-normal / model residuals non-normal & model assumptions not met
+
+EA full task: variables non-normal / model residuals non-normal & model assumptions not met
+EA positive: variables non-normal / model residuals non-normal & model assumptions not met
+EA negative: variables non-normal / model residuals non-normal & model assumptions not met
+
+Simulation: variables non-normal / model residuals non-normal & model assumptions not met
+Mentalizing: variables non-normal / model residuals non-normal & model assumptions not met
+
+
+```{r mentalizing - graphing, fig.height=2.5, fig.width=4}
+
+# density plots of mentalizing data
+ggplot(matched_prisma_df, aes(x = mentalizing)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('mentalizing factor score')
+#ggsave("mentalizing_density_by_group.jpeg", device = "jpeg", width=4.5, height=3)
+
+# plotting 
+ggplot(matched_prisma_df, aes(y=mentalizing, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('mentalizing factor score')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("mentalizing_fscore_by_group.jpeg", device = "jpeg", width=4.5, height=3)
+#ggsave("mentalizing_fscore_by_group.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+ggplot(matched_prisma_df, aes(y=mentalizing, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) +
+  xlab('') + ylab('mentalizing factor score') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="", labels=c('Aut', 'TDC', 'SSDs')) 
+
+```
+
+
+```{r  mentalizing - group comparisons}
+
+#mentalizing group comparisons - without covariates
+mentalizing_aov <- aov(mentalizing~group,matched_prisma_df)
+summary(mentalizing_aov)
+#report the means and the number of subjects/cell
+print(model.tables(mentalizing_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$mentalizing,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+# Group comparisons covarying for age and sex - with pairwise comparisons
+# for PAPER
+
+mental_lm <- lm(mentalizing ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(mental_lm, type="III") # for overall model significance
+Anova(mental_lm, type = "III") # for main effects
+emmeans(mental_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+# checking for normality of the residuals from our model
+ols_test_normality(mental_lm) # not normally districuted
+
+mental_lm.diag <- gvlma(mental_lm) # model  asumptions NOT met
+summary(mental_lm.diag) 
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality (of raw data)
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(mentalizing) # not normally distrubted across all group
+
+# kruskal-test for non normal distribution
+mentalizing.kruskal <- matched_prisma_df %>% kruskal_test(mentalizing ~ group)
+mentalizing.kruskal
+
+# Pairwise comparisons
+mentalizing_pwc <- matched_prisma_df %>% 
+  dunn_test(mentalizing ~ group, p.adjust.method = "fdr") 
+mentalizing_pwc
+
+
+```
+
+
+```{r simulation - graphing }
+
+# sig group difference in simulation
+
+# density plots of simulation data
+ggplot(matched_prisma_df, aes(x = simulation)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('simulation factor score')
+#ggsave("simulation_density_by_group.jpeg", device = "jpeg", width=4.5, height=3)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=simulation, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('simulation factor score')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("simulation_fscore_by_group.jpeg", device = "jpeg", width=4.5, height=3)
+#ggsave("simulation_fscore_by_group.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+ggplot(matched_prisma_df, aes(y=simulation, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) +
+  xlab('') + ylab('simulation factor score') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="", labels=c('Aut', 'TDC', 'SSDs')) 
+
+#simulation group comparisons (without covariates)
+simulation_aov <- aov(simulation~group, matched_prisma_df)
+summary(simulation_aov)
+#report the means and the number of subjects/cell
+print(model.tables(simulation_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$simulation,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+
+```
+
+
+```{r simulation - group comparisons}
+
+#simulation group comparisons (without covariates)
+simulation_aov <- aov(simulation~group, matched_prisma_df)
+summary(simulation_aov)
+#report the means and the number of subjects/cell
+print(model.tables(simulation_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$simulation,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+# Group comparisons covarying for age and sex - with pairwise comparisons
+# for PAPER
+
+simulation_lm <- lm(simulation ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(simulation_lm, type="III") # for overall model significance
+Anova(simulation_lm, type = "III") # for main effects
+emmeans(simulation_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+# checking for normality of the residuals from our model
+ols_test_normality(simulation_lm) # not normally districuted
+
+simulation_lm.diag <- gvlma(simulation_lm) # model asumptions NOT met
+summary(simulation_lm.diag)
+
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(simulation) # not normally distrubted for ASD and SSD 
+
+# kruskal-test for non normal distribution
+simulation.kruskal <- matched_prisma_df %>% kruskal_test(simulation ~ group)
+simulation.kruskal
+
+# Pairwise comparisons
+simulation_pwc <- matched_prisma_df %>% 
+  dunn_test(simulation ~ group, p.adjust.method = "fdr") 
+simulation_pwc
+
+
+```
+
+
+## social cognitive measures
+
+```{r mean ea - graphing, fig.width=4, fig.height=2.5}
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = mean_ea_z)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('mean ea (z-score)')
+#ggsave("mean_ea_histogram.pdf", width=7, height=4)
+#ggsave("mean_ea_z_hist.jpeg", device = "jpeg", width=4, height=2.5)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=mean_ea_z, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Mean ea (z-score)')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("mean_ea_group_diff.pdf", width=7, height=4)
+#ggsave("mean_ea_z.jpeg", device = "jpeg", width=4, height=2.5)
+#ggsave("mean_ea_z.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+
+# add violin plot
+ggplot(matched_prisma_df, aes(y=mean_ea_z, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) +
+  xlab('') + ylab('Mean EA (z-score)') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="", labels=c('Aut', 'TDC', 'SSDs')) 
+
+```
+
+
+```{r mean EA for positive videos - graphing, fig.width=4, fig.height=2.5}
+
+# Probably DO Z score
+
+# mean of videos corresponding to positive: videos 1, 3, 5, 6
+matched_prisma_df <- matched_prisma_df %>%
+mutate(mean_ea_positive = ((mean_ea_video1+mean_ea_video3+mean_ea_video5+mean_ea_video6)/4))
+
+# z-score ea_positive
+matched_prisma_df$mean_ea_positive_z <- fisherz(matched_prisma_df$mean_ea_positive)
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = mean_ea_positive_z)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group)+
+  xlab('mean ea - positive (z-score)')
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("mean_ea_pos_z_hist.jpeg", device = "jpeg", width=4, height=2.5)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=mean_ea_positive_z, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('mean ea - positive (z-score)')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("mean_ea_positive_z.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+
+# add violin plot
+ggplot(matched_prisma_df, aes(y=mean_ea_positive_z, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) +
+  xlab('') + ylab('Mean EA - Positive (z-score)') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="", labels=c('Aut', 'TDC', 'SSDs')) 
+
+```
+
+```{r mean EA for negative videos - graphing, fig.width=4, fig.height=2.5}
+
+# add together videos corresponding to negative: videos 2, 4, 7, 8, 9
+
+matched_prisma_df <- matched_prisma_df %>%
+mutate(mean_ea_negative = ((mean_ea_video2+mean_ea_video4+mean_ea_video5+mean_ea_video6)/4))
+
+# z-score ea_negative
+matched_prisma_df$mean_ea_negative_z <- fisherz(matched_prisma_df$mean_ea_negative)
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = mean_ea_negative_z)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('mean ea - negative (z-score)')
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("mean_ea_z_neg_hist.jpeg", device = "jpeg", width=4, height=2.5)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=mean_ea_negative_z, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  facet_wrap(.~ demo_sex_birth)+
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('mean ea - negative (z-score)')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("mean_ea_negative_z.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+
+# add violin plot
+ggplot(matched_prisma_df, aes(y=mean_ea_negative_z, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) +
+  xlab('') + ylab('Mean EA - Negative (z-score)') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="", labels=c('Aut', 'TDC', 'SSDs'))
+
+```
+
+```{r histograms of all videos - just to see if anything looks striking}
+
+# keep replacing just to have a look - single videos (or runs)
+ggplot(matched_prisma_df, aes(x = mean_ea_run3)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('mean ea')
+
+```
+
+
+
+
+```{r EA task table - with stats}
+
+# which variables are normally distributed and which ones are not?
+
+matched_prisma_df %>%
+  group_by(group) %>% 
+  shapiro_test(mean_ea, mean_ea_z, mean_ea_positive, mean_ea_positive_z, mean_ea_negative, mean_ea_negative_z)
+# none of the variables are normally distributed)
+
+
+#Table with stats - added simulation and mentalizing
+
+myVars <- c("mean_ea_z", "mean_ea_positive_z", "mean_ea_negative_z", "simulation", "mentalizing")
+
+## Vector of categorical variables  
+#catVars <- c("")
+
+## Create a TableOne matrix file that inludes p values
+table2_stats <- print(CreateTableOne(vars = myVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+
+## Create a TableOne matrix file that inludes p values (non-normal tests - which seems like the way to go!!)
+table2_stats_nonnorm <- print(CreateTableOne(vars = myVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), nonnormal=c("mean_ea_z", "mean_ea_positive_z", "mean_ea_negative_z", "simulation", "mentalizing"), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+
+# non-normal: selected this because not normally distributed
+table_s5 <- print(table2_stats_nonnorm) # to get medians and IQRs, and p values
+
+#write.csv(table_s5,file="/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/table_soc_cog_pvals.csv")
+
+```
+
+
+```{r EA full task - group comparisons}
+
+#  mean_ea_z
+EA_aov <- aov(mean_ea_z~group,matched_prisma_df)
+summary(EA_aov)
+#report the means and the number of subjects/cell
+print(model.tables(EA_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$mean_ea_z,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# Group comparisons covarying for age and sex - with pairwise comparisons
+EA_lm <- lm(mean_ea_z ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(EA_lm, type="III") # for overall model significance
+Anova(EA_lm, type = "III") # for main effects
+emmeans(EA_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(EA_lm) # not normally districuted
+
+EA_lm.diag <- gvlma(EA_lm) # model asumptions NOT met
+summary(EA_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(mean_ea_z) # not normally distrubted for ASD SSD and TDC
+
+# kruskal-test for non normal distribution
+ea_full_task.kruskal <- matched_prisma_df %>% kruskal_test(mean_ea_z ~ group)
+ea_full_task.kruskal
+
+# Pairwise comparisons
+ea_full_task_pwc <- matched_prisma_df %>% 
+  dunn_test(mean_ea_z ~ group, p.adjust.method = "fdr") 
+ea_full_task_pwc
+
+
+```
+
+
+```{r EA positive - group comparisons}
+
+#  mean_ea_positive_z
+EA_pos_aov <- aov(mean_ea_positive_z~group,matched_prisma_df)
+summary(EA_pos_aov)
+#report the means and the number of subjects/cell
+print(model.tables(EA_pos_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$mean_ea_positive_z,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# Group comparisons covarying for age and sex - with pairwise comparisons
+
+EA_lm_pos <- lm(mean_ea_positive_z ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(EA_lm_pos, type="III") # for overall model significance
+Anova(EA_lm_pos, type = "III") # for main effects
+emmeans(EA_lm_pos, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(EA_lm_pos) # not normally districuted
+
+EA_lm_pos.diag <- gvlma(EA_lm_pos) # model asumptions NOT met
+summary(EA_lm_pos.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(mean_ea_positive_z) # not normally distrubted for SSD and TDC
+
+# kruskal-test for non normal distribution
+ea_positive.kruskal <- matched_prisma_df %>% kruskal_test(mean_ea_positive_z ~ group)
+ea_positive.kruskal
+
+# Pairwise comparisons
+ea_positive_pwc <- matched_prisma_df %>% 
+  dunn_test(mean_ea_positive_z ~ group, p.adjust.method = "fdr") 
+ea_positive_pwc
+
+
+```
+
+
+```{r EA negative - group comparisons}
+
+
+#  mean_ea_negative_z
+EA_neg_aov <- aov(mean_ea_negative_z~group,matched_prisma_df)
+summary(EA_neg_aov)
+#report the means and the number of subjects/cell
+print(model.tables(EA_neg_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$mean_ea_negative_z,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# Group comparisons covarying for age and sex - with pairwise comparisons
+
+EA_lm_neg <- lm(mean_ea_negative_z ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(EA_lm_neg, type="III") # for overall model significance
+Anova(EA_lm_neg, type = "III") # for main effects
+emmeans(EA_lm_neg, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(EA_lm_neg) # not normally districuted
+
+EA_lm_neg.diag <- gvlma(EA_lm_neg) # model asumptions NOT met
+summary(EA_lm_neg.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(mean_ea_negative_z) # not normally distrubted for TDC
+
+# kruskal-test for non normal distribution
+ea_negative.kruskal <- matched_prisma_df %>% kruskal_test(mean_ea_negative_z ~ group)
+ea_negative.kruskal
+
+# Pairwise comparisons
+ea_negative_pwc <- matched_prisma_df %>% 
+  dunn_test(mean_ea_negative_z ~ group, p.adjust.method = "fdr") 
+ea_negative_pwc
+
+
+
+```
+
+
+
+```{r REMT - graphing}
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = rmet_total)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('REMT score')
+#ggsave("choose_name.pdf", width=4, height=4)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=rmet_total, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('RMET score')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("RMET.pdf", width=6, height=4)
+#ggsave("RMET.jpeg", device = "jpeg", width=4.5, height=3)
+#ggsave("RMET.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+```
+
+
+```{r RMET group comparisons}
+
+RMET_aov <- aov(rmet_total~group,matched_prisma_df)
+summary(RMET_aov)
+
+#report the means and the number of subjects/cell
+print(model.tables(RMET_aov,"means"),digits=5)
+
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$rmet_total,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+
+RMET_lm <- lm(rmet_total ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(RMET_lm, type="III") # for overall model significance
+Anova(RMET_lm, type = "III") # for main effects
+emmeans(RMET_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+# checking for normality of the residuals from our model
+ols_test_normality(RMET_lm) # not normally districuted
+
+RMET_lm.diag <- gvlma(RMET_lm) # model asumptions NOT met
+summary(RMET_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(rmet_total) # not normally distrubted for ASD and SSD
+
+# kruskal-test for non normal distribution
+rmet.kruskal <- matched_prisma_df %>% kruskal_test(rmet_total ~ group)
+rmet.kruskal
+
+# Pairwise comparisons
+rmet_pwc <- matched_prisma_df %>% 
+  dunn_test(rmet_total ~ group, p.adjust.method = "fdr") 
+rmet_pwc
+
+```
+
+
+
+```{r IRI - graphing}
+
+# NS differences between groups
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = iri_total)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('IRI score')
+#ggsave("choose_name.pdf", width=4, height=4)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=iri_total, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('IRI score')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("IRI.jpeg", device = "jpeg", width=4.5, height=3)
+
+```
+
+
+```{r IRI group comparisons}
+
+# without covariates
+IRI_aov <- aov(iri_total~group,matched_prisma_df)
+summary(IRI_aov)
+
+#report the means and the number of subjects/cell
+print(model.tables(IRI_aov,"means"),digits=5)
+
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$iri_total,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+IRI_lm <- lm(iri_total ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(IRI_lm, type="III") # for overall model significance
+Anova(IRI_lm, type = "III") # for main effects
+emmeans(IRI_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+# checking for normality of the residuals from our model
+ols_test_normality(IRI_lm) # normally distributed
+
+IRI_lm.diag <- gvlma(IRI_lm) # model asumptions acceptable
+summary(IRI_lm.diag)
+
+# DECIDE!!!
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(iri_total) # normally distributed, so no need for non-parametric
+
+
+```
+
+
+```{r TASIT - graphing}
+
+# Replace with each of the following to get appropriate graphs:
+# tasit_correct_total 
+# tasit_part2_grandtotal
+# tasit_part3_grandtotal_lies
+# tasit_part3_grandtotal_sarcasm
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = tasit_part3_grandtotal_sarcasm)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('TASIT part 3 - lies')
+#ggsave("choose_name.pdf", width=4, height=4)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=tasit_part3_grandtotal_sarcasm, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('TASIT 3 - sarcasm')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("tasit1.jpeg", device = "jpeg", width=4, height=2.5) # paper
+#ggsave("tasit2.jpeg", device = "jpeg", width=4, height=2.5) # paper
+#ggsave("tasit3_lies.jpeg", device = "jpeg", width=4, height=2.5) # paper
+#ggsave("tasit3_sarcasm.jpeg", device = "jpeg", width=4, height=2.5) # paper
+
+```
+
+
+```{r TASIT part 1 - group comparisons}
+
+#tasit_correct_total
+tasit1_aov <- aov(tasit_correct_total~group,matched_prisma_df)
+summary(tasit1_aov)
+#report the means and the number of subjects/cell
+print(model.tables(tasit1_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$tasit_correct_total,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+tasit_lm <- lm(tasit_correct_total ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(tasit_lm, type="III") # for overall model significance
+Anova(tasit_lm, type = "III") # for main effects
+emmeans(tasit_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(tasit_lm) # not normally districuted
+
+tasit_lm.diag <- gvlma(tasit_lm) # model asumptions NOT met
+summary(tasit_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(scog_er40_cr_columnpcr_value) # not normally distrubted for ASD and SSD
+
+# kruskal-test for non normal distribution
+tasit1.kruskal <- matched_prisma_df %>% kruskal_test(tasit_correct_total ~ group)
+tasit1.kruskal
+
+# Pairwise comparisons
+tasit1_pwc <- matched_prisma_df %>% 
+  dunn_test(tasit_correct_total ~ group, p.adjust.method = "fdr") 
+tasit1_pwc
+
+
+```
+
+
+```{r Tasit part 2 - group comparisons}
+
+#tasit_part2_grandtotal
+tasit2_aov <- aov(tasit_part2_grandtotal~group,matched_prisma_df)
+summary(tasit2_aov)
+#report the means and the number of subjects/cell
+print(model.tables(tasit2_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$tasit_part2_grandtotal,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+tasit2_lm <- lm(tasit_part2_grandtotal ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(tasit2_lm, type="III") # for overall model significance
+Anova(tasit2_lm, type = "III") # for main effects
+emmeans(tasit2_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(tasit2_lm) # not normally districuted
+
+tasit2_lm.diag <- gvlma(tasit2_lm) # model asumptions NOT met
+summary(tasit2_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(tasit_part2_grandtotal) # not normally distrubted for ASD and SSD
+
+# kruskal-test for non normal distribution
+tasit2.kruskal <- matched_prisma_df %>% kruskal_test(tasit_part2_grandtotal ~ group)
+tasit2.kruskal
+
+# Pairwise comparisons
+tasit2_pwc <- matched_prisma_df %>% 
+  dunn_test(tasit_part2_grandtotal ~ group, p.adjust.method = "fdr") 
+tasit2_pwc
+
+```
+
+
+```{r Tasit 3 - lies - group comparisons}
+
+#tasit_part3_grandtotal_lies
+tasit3_lies_aov <- aov(tasit_part3_grandtotal_lies~group,matched_prisma_df)
+summary(tasit3_lies_aov)
+#report the means and the number of subjects/cell
+print(model.tables(tasit3_lies_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$tasit_part3_grandtotal_lies,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+tasit3_lies_lm <- lm(tasit_part3_grandtotal_lies ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(tasit3_lies_lm, type="III") # for overall model significance
+Anova(tasit3_lies_lm, type = "III") # for main effects
+emmeans(tasit3_lies_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(tasit3_lies_lm) # not normally districuted
+
+tasit3_lm.diag <- gvlma(tasit3_lies_lm) # model asumptions NOT met
+summary(tasit3_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(tasit_part3_grandtotal_lies) # not normally distrubted for ASD and TDC
+
+# kruskal-test for non normal distribution
+tasit3_lies.kruskal <- matched_prisma_df %>% kruskal_test(tasit_part3_grandtotal_lies ~ group)
+tasit3_lies.kruskal
+
+# Pairwise comparisons
+tasit3_lies_pwc <- matched_prisma_df %>% 
+  dunn_test(tasit_part3_grandtotal_lies ~ group, p.adjust.method = "fdr") 
+tasit3_lies_pwc
+
+```
+
+
+```{r Tasit 3 - sarcasm - group comparisons}
+
+#tasit_part3_grandtotal_sarcasm
+tasit3_sarc_aov <- aov(tasit_part3_grandtotal_sarcasm~group,matched_prisma_df)
+summary(tasit3_sarc_aov)
+#report the means and the number of subjects/cell
+print(model.tables(tasit3_sarc_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$tasit_part3_grandtotal_sarcasm,matched_prisma_df$group,p.adj = 'fdr',paired = F)
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+tasit3_sarc_lm <- lm(tasit_part3_grandtotal_sarcasm ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(tasit3_sarc_lm, type="III") # for overall model significance
+Anova(tasit3_sarc_lm, type = "III") # for main effects
+emmeans(tasit3_sarc_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(tasit3_sarc_lm) # not normally districuted
+
+tasit3_sarc_lm.diag <- gvlma(tasit3_sarc_lm) # model asumptions NOT met
+summary(tasit3_sarc_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(tasit_part3_grandtotal_sarcasm) # not normally distrubted for ASD and TDC
+
+# kruskal-test for non normal distribution
+tasit3_sarc.kruskal <- matched_prisma_df %>% kruskal_test(tasit_part3_grandtotal_sarcasm ~ group)
+tasit3_sarc.kruskal
+
+# Pairwise comparisons
+tasit3_sarc_pwc <- matched_prisma_df %>% 
+  dunn_test(tasit_part3_grandtotal_sarcasm ~ group, p.adjust.method = "fdr") 
+tasit3_sarc_pwc
+
+
+
+```
+
+
+
+```{r ER40 - graphing}
+
+# NS differences between groups
+
+# density plots of EA data
+ggplot(matched_prisma_df, aes(x = scog_er40_cr_columnpcr_value)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('ER40 score')
+#ggsave("choose_name.pdf", width=4, height=4)
+
+# plotting test (perhaps should plot z scores though!!)
+ggplot(matched_prisma_df, aes(y=scog_er40_cr_columnpcr_value, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('ER-40 score')+
+scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")
+#ggsave("choose_name.pdf", width=4, height=4)
+#ggsave("ER40.jpeg", device = "jpeg", width=4.5, height=3)
+#ggsave("ER40.jpeg", device = "jpeg", width=4, height=2.5) #  paper
+ 
+```
+
+
+```{r ER-40 group comparisons}
+
+
+# without covariates
+ER40_aov <- aov(scog_er40_cr_columnpcr_value~group,matched_prisma_df)
+summary(ER40_aov)
+
+#report the means and the number of subjects/cell
+print(model.tables(ER40_aov,"means"),digits=5)
+
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$scog_er40_cr_columnpcr_value,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# group comparisons covarying for age and sex, with pairwise comparisons
+# for PAPER
+
+ER40_lm <- lm(scog_er40_cr_columnpcr_value ~ group + demo_age + demo_sex_birth, data=matched_prisma_df)
+summary(ER40_lm, type="III") # for overall model significance
+Anova(ER40_lm, type = "III") # for main effects
+emmeans(ER40_lm, pairwise~group, adjust = "fdr") # for pairwise comparisons
+
+
+# checking for normality of the residuals from our model
+ols_test_normality(ER40_lm) # not normally districuted
+
+ER40_lm.diag <- gvlma(ER40_lm) # model asumptions NOT met
+summary(ER40_lm.diag)
+
+
+# GOING WITH THIS FOR PAPER
+
+# checking for normality
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(scog_er40_cr_columnpcr_value) # not normally distrubted for ASD and SSD
+
+# kruskal-test for non normal distribution
+er40.kruskal <- matched_prisma_df %>% kruskal_test(scog_er40_cr_columnpcr_value ~ group)
+er40.kruskal
+
+# Pairwise comparisons
+er40_pwc <- matched_prisma_df %>% 
+  dunn_test(scog_er40_cr_columnpcr_value ~ group, p.adjust.method = "fdr") 
+er40_pwc
+
+
+
+```
+
+
+## Participant demographics
+
+ 
+```{r Matched sample table - for Table 1 - demogrphics}
+
+## PAPER TABLE
+
+# Add scanner and EA values to this table too? Or EA separate table
+matched_prisma_df$np_fact_handedness <- as.factor(matched_prisma_df$np_fact_handedness)
+
+matched_prisma_df <-
+  matched_prisma_df %>% mutate(handedness = factor(np_fact_handedness,
+                      levels = c(1, 2, 3),
+                      labels = c("Right", "Left", "Mixed")))
+
+# ordering race so it shows up the same way in all tables
+matched_prisma_df <- 
+  matched_prisma_df %>% mutate(demo_race = factor(demo_race, levels = c("White","Black or African American","Asian","More than one race","Other"), ordered=T))
+
+label(matched_prisma_df$demo_age) <- "Age (years)"
+label(matched_prisma_df$demo_sex_recode) <- "Sex"
+label(matched_prisma_df$demo_ethnicity) <- "Ethnicity"
+label(matched_prisma_df$demo_race) <- "Race"
+label(matched_prisma_df$handedness) <- "Handedness"
+label(matched_prisma_df$demo_highest_grade_self) <- "Education (years)"
+label(matched_prisma_df$iq) <- "Estimated IQ"
+label(matched_prisma_df$scanner) <- "Scanner"
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# intially the rouding digist was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ demo_age + demo_sex_recode + handedness + demo_race + demo_ethnicity + demo_highest_grade_self + iq + scanner| group,
+       data = matched_prisma_df,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+```
+
+
+
+```{r matched sample table - stats - createtableone}
+
+# which variables are normally distributed and which ones are not?
+# include all EA measures to this list as well once added to dataframe - to check if normal distribution
+
+matched_prisma_df$demo_race <- as.factor(matched_prisma_df$demo_race)
+
+matched_prisma_df %>%
+  group_by(group) %>%
+  shapiro_test(demo_age, iq, demo_highest_grade_self)
+# none of the variables are normally distributed (for at least one group)
+
+
+#Table with stats 
+
+myVars <- c("demo_age", "demo_sex_recode", "handedness", "demo_race", "demo_ethnicity", "demo_highest_grade_self", "iq", "scanner")
+
+## Vector of categorical variables  
+catVars <- c("demo_sex_recode", "handedness", "demo_race", "demo_ethnicity", "scanner")
+
+
+## Create a TableOne matrix file that inludes p values
+table1_stats <- print(CreateTableOne(vars = myVars, factorVars = catVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+
+## Create a TableOne matrix file that inludes p values (non-normal tests)
+table1_stats <- print(CreateTableOne(vars = myVars, factorVars = catVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), nonnormal=c("demo_age", "iq", "demo_highest_grade_self"), exact=c("handedness","demo_race", "demo_ethnicity"), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+#race and ethnicity tested with fisher's because of small n's in some cells, but not needed for sex
+# non-normal: selected this becuase not normally distrubted
+table1_stats
+
+
+# Fisher's exact for race (creates a simulated p value because "too small for this problem")
+# fisher.test(matched_prisma_df$handedness, matched_prisma_df$group, alternative="two.sided") # does not work
+fisher.test(matched_prisma_df$demo_race, matched_prisma_df$group, alternative="two.sided", simulate.p.value=TRUE, B=1e7)
+
+```
+
+
+
+
+```{r social cog summary table - with stats}
+
+#write.csv(matched_prisma_df, "SPIN_ASD_EA_task_cohort.csv", row.names = FALSE ) # this is for Arla!!
+
+
+# which variables are normally distributed and which ones are not?
+
+matched_prisma_df %>%
+  group_by(group) %>% 
+  shapiro_test(rmet_total, iri_total, tasit_correct_total, tasit_part2_grandtotal, tasit_part3_grandtotal_lies, tasit_part3_grandtotal_sarcasm, scog_er40_cr_columnpcr_value)
+# none of the variables are normally distributed)
+
+
+#Table with stats 
+
+myVars <- c("rmet_total", "iri_total", "tasit_correct_total", "tasit_part2_grandtotal", "tasit_part3_grandtotal_lies", "tasit_part3_grandtotal_sarcasm", "scog_er40_cr_columnpcr_value")
+
+## Vector of categorical variables  
+#catVars <- c("")
+
+## Create a TableOne matrix file that inludes p values
+table3_stats <- print(CreateTableOne(vars = myVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+
+## Create a TableOne matrix file that inludes p values (non-normal tests - which seems like the way to go!!)
+table3_stats_nonnorm <- print(CreateTableOne(vars = myVars, includeNA = FALSE, strata = "group", data = matched_prisma_df), nonnormal=c("rmet_total", "iri_total", "tasit_correct_total", "tasit_part2_grandtotal", "tasit_part3_grandtotal_lies", "tasit_part3_grandtotal_sarcasm", "scog_er40_cr_columnpcr_value"), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+table3_stats_nonnorm
+
+
+```
+
+
+```{r testing associations between social cog vars with age and sex}
+
+# Age and sex are not related to any of the social cog variables
+
+summary(lm(mean_ea_z ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(mean_ea_positive_z ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(mean_ea_negative_z ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(rmet_total ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS, but sex almost sig (p=0.06)
+summary(lm(scog_er40_cr_columnpcr_value ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(tasit_correct_total ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(tasit_part2_grandtotal ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+summary(lm(tasit_part3_grandtotal_lies ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # age almost sig (p=0.08)
+summary(lm(tasit_part3_grandtotal_sarcasm ~ demo_age + demo_sex_birth, data = matched_prisma_df)) # NS
+
+```
+
+
+
+```{r Matched sample table - social cog - NEW for EA, ment, and sim}
+
+# Add scanner and EA values to this table too? Or EA separate table
+
+label(matched_prisma_df$mean_ea_z) <- "EA performance (full task)"
+label(matched_prisma_df$mean_ea_positive_z) <- "EA performance (positive videos)"
+label(matched_prisma_df$mean_ea_negative_z) <- "EA performance (negative videos"
+label(matched_prisma_df$rmet_total) <- "RMET - total score"
+# label(matched_prisma_df$iri_total) <- "IRI - total score"
+label(matched_prisma_df$scog_er40_cr_columnpcr_value) <- "ER40 - total correct"
+label(matched_prisma_df$tasit_correct_total) <- "TASIT - part 1 total"
+label(matched_prisma_df$tasit_part2_grandtotal) <- "TASIT - part 2 total"
+label(matched_prisma_df$tasit_part3_grandtotal_lies) <- "TASIT - part 3 (lies)"
+label(matched_prisma_df$tasit_part3_grandtotal_sarcasm) <- "TASIT - part 3 (sarcasm)"
+
+# add variable with recoded groups
+matched_prisma_df$group_abr <- recode(matched_prisma_df$group, ASD = "Aut", SSD = "SSD", Control = "TDC")
+matched_prisma_df$group_abr <- factor(matched_prisma_df$group_abr, levels =  c("Aut", "SSD","TDC"))
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# initially the rounding digits was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+soc_cog_table <- table1(~ mean_ea_z + mean_ea_positive_z + mean_ea_negative_z + simulation + mentalizing | group_abr,
+       data = matched_prisma_df, overall = c(left="Full sample"), # overall = F to remove
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+
+print(soc_cog_table)
+
+sc_table_df <- as.data.frame(soc_cog_table)
+
+print(sc_table_df)
+
+#write.csv(soc_cog_table,file="/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/table_soc_cog.csv") # this isn't giving me the table output I want
+
+write.table (data, "filename.csv", row.names=FALSE, sep=",")
+
+```
+
+
+
+```{r Matched sample table - separated by sex }
+
+# re-create same sample as EA task cohort, to compare how they differ
+
+label(matched_prisma_df$demo_age) <- "Age (years)"
+label(matched_prisma_df$demo_sex_recode) <- "Sex"
+label(matched_prisma_df$handedness) <- "Handedness"
+label(matched_prisma_df$demo_ethnicity) <- "Ethnicity"
+label(matched_prisma_df$demo_race) <- "Race"
+label(matched_prisma_df$demo_highest_grade_self) <- "Education (years)"
+label(matched_prisma_df$iq) <- "Estimated IQ"
+label(matched_prisma_df$scanner) <- "Scanner"
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# intially the rouding digist was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+ 
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ demo_age + handedness + demo_race + demo_ethnicity + demo_highest_grade_self + iq + scanner| demo_sex_recode,
+       data = matched_prisma_df,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+```

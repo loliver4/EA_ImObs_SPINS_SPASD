@@ -1,0 +1,258 @@
+---
+title: "ImObs_participant_characteristics"
+author: "Iska"
+date: '2022-01-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries}
+library(dplyr)
+library(ggplot2)
+library(glue)
+library(here)
+library(lubridate)
+library(plotly)
+library(readr)
+library(stringr)
+library(table1)
+library(tidyr)
+library(rstatix)
+library(tableone)
+
+```
+
+
+```{r load dataframe}
+
+imobs_sample <- read.csv("ImObs_participant_df.csv")
+
+```
+
+
+```{r Matched sample table - to match to the EA demographics table }
+
+# create a dataset that only included participants with passable IMOBS data
+imobs_pass_sample <- imobs_sample %>% filter(imi_obs_FD_pass == "Pass both")
+
+imobs_pass_sample$np_fact_handedness <- as.factor(imobs_pass_sample$np_fact_handedness)
+
+imobs_pass_sample <-
+  imobs_pass_sample %>% mutate(handedness = factor(np_fact_handedness,
+                      levels = c(1, 2, 3),
+                      labels = c("Right", "Left", "Mixed")))
+
+# ordering race so it shows up the same way in all tables
+imobs_pass_sample <- 
+  imobs_pass_sample %>% mutate(demo_race = factor(demo_race, levels = c("White","Black or African American","Asian","More than one race","Other"), ordered=T))
+
+
+# re-create same sample as EA task cohort, to compare how they differ
+
+label(imobs_pass_sample$demo_age) <- "Age (years)"
+label(imobs_pass_sample$demo_sex_recode) <- "Sex"
+label(imobs_pass_sample$demo_ethnicity) <- "Ethnicity"
+label(imobs_pass_sample$demo_race) <- "Race"
+label(imobs_pass_sample$handedness) <- "Handedness"
+label(imobs_pass_sample$demo_highest_grade_self) <- "Education (years)"
+label(imobs_pass_sample$iq) <- "Estimated IQ"
+label(imobs_pass_sample$scanner) <- "Scanner"
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# intially the rouding digist was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ demo_age + demo_sex_recode + handedness + demo_race + demo_ethnicity + demo_highest_grade_self + iq + scanner| group,
+       data = imobs_pass_sample,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+
+
+```
+
+
+
+```{r matched sample table - stats - createtableone}
+
+# which variables are normally distributed and which ones are not?
+# include all EA measures to this list as well once added to dataframe - to check if normal distribution
+
+imobs_pass_sample$demo_race <- as.factor(imobs_pass_sample$demo_race)
+
+imobs_pass_sample %>%
+  group_by(group) %>%
+  shapiro_test(demo_age, iq, demo_highest_grade_self)
+# none of the variables are normally distributed (for at least one group)
+
+
+#Table with stats 
+
+myVars <- c("demo_age", "demo_sex_recode", "handedness", "demo_race", "demo_ethnicity", "demo_highest_grade_self", "iq", "scanner")
+
+## Vector of categorical variables  
+catVars <- c("demo_sex_recode", "handedness", "demo_race", "demo_ethnicity", "scanner")
+
+
+## Create a TableOne matrix file that inludes p values
+table1_stats <- print(CreateTableOne(vars = myVars, factorVars = catVars, includeNA = FALSE, strata = "group", data = imobs_pass_sample), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+
+## Create a TableOne matrix file that inludes p values (non-normal tests)
+table1_stats <- print(CreateTableOne(vars = myVars, factorVars = catVars, includeNA = FALSE, strata = "group", data = imobs_pass_sample), nonnormal=c("demo_age", "iq", "demo_highest_grade_self"), exact=c("handedness","demo_race", "demo_ethnicity"), showAllLevels = FALSE, varLabels = TRUE, formatOptions = list(big.mark = ","))
+#handedness, race and ethnicity tested with fisher's because of small n's in some cells, but not needed for sex
+# non-normal: selected this becuase not normally distrubted
+table1_stats
+
+
+
+# Fisher's exact for race (creates a simulated p value because "too small for this problem")
+# fisher.test(imobs_pass_sample$handedness, imobs_pass_sample$group, alternative="two.sided") # does not work
+fisher.test(imobs_pass_sample$demo_race, imobs_pass_sample$group, alternative="two.sided", simulate.p.value=TRUE, B=1e7)
+
+
+```
+
+
+
+
+
+```{r Excluded imobs participants table - same format as EA demographics table }
+
+# create a dataset that only included participants with passable IMOBS data
+imobs_fail_sample <- imobs_sample %>% filter(imi_obs_FD_pass == "Fail either" | is.na(imi_obs_FD_pass))
+
+# re-create same sample as EA task cohort, to compare how they differ
+
+label(imobs_fail_sample$demo_age) <- "Age (years)"
+label(imobs_fail_sample$demo_sex_recode) <- "Sex"
+label(imobs_fail_sample$demo_ethnicity) <- "Ethnicity"
+label(imobs_fail_sample$demo_race) <- "Race"
+label(imobs_fail_sample$demo_highest_grade_self) <- "Education (years)"
+label(imobs_fail_sample$iq) <- "Estimated IQ"
+label(imobs_fail_sample$scanner) <- "Scanner"
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# intially the rouding digist was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ demo_age + demo_sex_recode + demo_race + demo_ethnicity + demo_highest_grade_self + iq + scanner| group,
+       data = imobs_fail_sample,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+```
+
+
+```{r adding factor score to imobs dataframe}
+
+#CSV with factor score for all participants - see what this looks like
+factor_score <- read.csv("soc_cog_factor_scores_08-03-2022.csv")
+# remove group from this dataframe, as it's a duplicate and will cause issues
+factor_score <- subset(factor_score, select = -c(group) )
+
+# match those in the imobs dataframe with factor score data: 
+imobs_pass_sample <- merge(imobs_pass_sample, factor_score, by="record_id", all.x=TRUE)
+
+table1(~ simulation + mentalizing | group,
+       data = imobs_pass_sample,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+
+# do groups differ in lower level factor score (simulation)
+simulation_aov <- aov(simulation~group,imobs_pass_sample)
+summary(simulation_aov)
+#report the means and the number of subjects/cell
+print(model.tables(simulation_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(imobs_pass_sample$simulation,imobs_pass_sample$group,p.adj = 'fdr',paired = F) 
+
+# do groups differ in higher level factor score (mentalizing)
+mentalizing_aov <- aov(mentalizing~group,imobs_pass_sample)
+summary(mentalizing_aov)
+#report the means and the number of subjects/cell
+print(model.tables(mentalizing_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(imobs_pass_sample$mentalizing,imobs_pass_sample$group,p.adj = 'fdr',paired = F) 
+
+
+# density plots of factor score data - simulation
+ggplot(imobs_pass_sample, aes(x = simulation)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('simulation - lower level factor score')
+
+# density plots of factor score data - mentalizing
+ggplot(imobs_pass_sample, aes(x = mentalizing)) +
+  geom_histogram(aes(color = group, fill = group), 
+                position = "identity", bins = 30, alpha = 0.4) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  facet_wrap(~group) +
+  xlab('mentalizing - higher level factor score')
+
+```
+
+
+```{r writing csvs for other R analyses}
+
+# write.csv(imobs_pass_sample, "imobs_sample_for_PALM.csv")
+
+```
+
+
+```{r Matched sample table - separated by sex - to match to the EA demographics table }
+
+imobs_pass_sample$np_fact_handedness <- as.factor(imobs_pass_sample$np_fact_handedness)
+
+imobs_pass_sample <-
+  imobs_pass_sample %>% mutate(handedness = factor(np_fact_handedness,
+                      levels = c(1, 2, 3),
+                      labels = c("Right", "Left", "Mixed")))
+
+# re-create same sample as EA task cohort, to compare how they differ
+
+label(imobs_pass_sample$demo_age) <- "Age (years)"
+label(imobs_pass_sample$demo_sex_recode) <- "Sex"
+label(imobs_pass_sample$demo_ethnicity) <- "Ethnicity"
+label(imobs_pass_sample$handedness) <- "Handedness"
+label(imobs_pass_sample$demo_race) <- "Race"
+label(imobs_pass_sample$demo_highest_grade_self) <- "Education (years)"
+label(imobs_pass_sample$iq) <- "Estimated IQ"
+label(imobs_pass_sample$scanner) <- "Scanner"
+
+my.render.cont <- function(x) {
+  with(stats.apply.rounding(stats.default(x), digits = 3),
+       c("",
+         "Mean (SD)" = sprintf("%s (&plusmn; %s)", MEAN, SD),
+         "Median [Min, Max]" = sprintf("%s [%s, %s]", MEDIAN, MIN, MAX)))
+}
+# intially the rouding digist was set to 2 - so it was rounding IQ up to the second digit (part of why it seemed high!)
+ 
+my.render.cat <- function(x) {
+  c("", sapply(stats.default(x), function(y) with(y, sprintf("%d (%0.0f %%)", FREQ, PCT))))
+}
+
+table1(~ demo_age + handedness + demo_race + demo_ethnicity + demo_highest_grade_self + iq + scanner| demo_sex_recode,
+       data = imobs_pass_sample,
+       render.continuous = my.render.cont, render.categorical = my.render.cat)
+```
+
+
+

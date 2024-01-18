@@ -1,0 +1,716 @@
+---
+title: "beta_weights_mentalizing_simulation"
+author: "Iska and Lindsay"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r load_libraries}
+library(dplyr)
+library(glue)
+library(lubridate)
+library(readr)
+library(stringr)
+library(table1)
+library(tidyr)
+library(tableone)
+library(rstatix) 
+library(ggplot2)
+library(psych) 
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  R.options = list(width = 60)
+)
+
+#date <- Sys.Date()
+
+ggplot2::theme_set(ggplot2::theme_minimal())
+```
+
+
+```{r Load social cog data and beta weights}
+
+# matched sample
+matched_prisma_df <- read.csv("SPIN_ASD_EA_task_cohort.csv", stringsAsFactors = FALSE)
+
+beta_weight_df <- read.csv("beta_values.csv")
+
+matched_prisma_df <- merge(matched_prisma_df, beta_weight_df, by=c("record_id"))
+
+matched_prisma_df$group <- as.factor(matched_prisma_df$group)
+
+```
+
+
+## BETA WEIGHTS - anterior insula and inferior frontal (relating to simulation)
+
+```{r Group Comparison Beta Weights - LEFT anterior insula inferior frontal cluster}
+
+# beta_left_AI_IF
+
+beta_left_AI_IF_aov <- aov(beta_left_AI_IF~group,matched_prisma_df)
+summary(beta_left_AI_IF_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_left_AI_IF_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_left_AI_IF,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_left_AI_IF, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Left cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")  + ylim(-2.5, 7.5)
+#ggsave("beta_left_AI_IF_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+```
+
+
+```{r scatter plot for beta weights - LEFT anterior insula inferior frontal cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weigts (left) to simulation factor score
+
+ggplot(data = matched_prisma_df, aes(x = simulation, y = beta_left_AI_IF, color = group)) + 
+  geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-2.5, 7.5)
+#ggsave("beta_left_simulation_AI_IF_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = simulation, y = beta_left_AI_IF)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-2.5, 7.5)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_left_simulation_AI_IF_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_AI_IF, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Left anterior insula / inferior frontal cluster') 
+
+```
+
+
+
+```{r Group Comparison Beta Weights - RIGHT anterior insula inferior frontal cluster}
+
+# beta_right_AI_IF
+
+beta_right_AI_IF_aov <- aov(beta_right_AI_IF~group,matched_prisma_df)
+summary(beta_right_AI_IF_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_right_AI_IF_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_right_AI_IF,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_right_AI_IF, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Right cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") + ylim(-2.5, 7.5)
+#ggsave("beta_right_AI_IF_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+
+
+```
+
+
+```{r scatter plot for beta weights - RIGHT anterior insula inferior frontal cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weigts (right) to simulation factor score
+
+ggplot(data = matched_prisma_df, aes(x = simulation, y = beta_right_AI_IF, color = group)) + 
+  geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-2.5, 7.5)
+#ggsave("beta_right_simulation_AI_IF_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = simulation, y = beta_right_AI_IF)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-2.5, 7.5)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_right_simulation_AI_IF_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = simulation, y = beta_right_AI_IF, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Simulation factor score') + 
+  ylab('Right cluster')
+#ggsave("beta_right_AI_IF_ellipse.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+```
+
+
+## BETA WEIGHTS - temporo-parietal junction (relating to mentalizing)
+
+```{r Group Comparison Beta Weights - LEFT TPJ cluster}
+
+# beta_left_TPJ
+
+beta_left_TPJ_aov <- aov(beta_left_TPJ~group,matched_prisma_df)
+summary(beta_left_TPJ_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_left_TPJ_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_left_TPJ,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_left_TPJ, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Left cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") + ylim(-5, 25)
+#ggsave("beta_left_TPJ_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+
+```
+
+
+```{r scatter plot for beta weights - LEFT temporo-parietal junction cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weights (left) to mentalizing factor score
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_TPJ, color = group)) +   geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-5, 25)
+#ggsave("beta_left_mentalizing_TPJ_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_TPJ)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-5, 25)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_left_mentalizing_TPJ_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_TPJ, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left temporo-parietal junction cluster') 
+
+```
+
+
+```{r Group Comparison Beta Weights - RIGHT temporo-parietal cluster}
+
+# beta_right_TPJ
+
+beta_right_TPJ_aov <- aov(beta_right_TPJ~group,matched_prisma_df)
+summary(beta_right_TPJ_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_right_TPJ_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_right_TPJ,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_right_TPJ, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Right cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") + ylim(-5, 25)
+#ggsave("beta_right_TPJ_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+
+```
+
+
+```{r scatter plot for beta weights - RIGHT temporo-parietal junction cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weigts (right) to mentalizing factor score
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_TPJ, color = group)) + 
+  geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-5, 25)
+#ggsave("beta_right_mentalizing_TPJ_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_TPJ)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-5, 25)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_right_mentalizing_TPJ_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_TPJ, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right temporo-parietal junction cluster') 
+
+```
+
+
+
+## BETA WEIGHTS - superior temporal sulcus (relating to mentalizing)
+
+
+```{r Group Comparison Beta Weights - LEFT superior temporal sulcus cluster}
+
+# beta_left_STS
+
+beta_left_STS_aov <- aov(beta_left_STS~group,matched_prisma_df)
+summary(beta_left_STS_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_left_STS_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_left_STS,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_left_STS, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Left cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="")+ ylim(-4, 14)
+#ggsave("beta_left_STS_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+
+```
+
+
+```{r scatter plot for beta weights - LEFT superior temporal sulcus cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weights (left) to mentalizing factor score
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_STS, color = group)) +
+  geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-4, 14)
+#ggsave("beta_left_mentalizing_STS_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_STS)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left cluster - beta weight') + ylim(-4, 14)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_left_mentalizing_STS_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_left_STS, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Left superior temporal sulcus') 
+
+```
+
+
+```{r Group Comparison Beta Weights - RIGHT superior temporal sulcus cluster}
+
+# beta_right_STS
+
+beta_right_STS_aov <- aov(beta_right_STS~group,matched_prisma_df)
+summary(beta_right_STS_aov)
+#report the means and the number of subjects/cell
+print(model.tables(beta_right_STS_aov,"means"),digits=5)
+# pairwise comparisons
+pairwise.t.test(matched_prisma_df$beta_right_STS,matched_prisma_df$group,p.adj = 'fdr',paired = F) 
+
+# box plot across groups
+ggplot(matched_prisma_df, aes(y=beta_right_STS, x=group, fill=group)) + 
+  geom_boxplot( alpha = 0.4) + 
+      geom_dotplot(binaxis = "y", stackdir = "center",  alpha = 0.8) +
+#  geom_point(aes(fill=group)) + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  #stat_summary(fun.y = mean, geom="point", shape=18, size=4, color="white")+
+  xlab('') + ylab('Right cluster - beta weight') + scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") + ylim(-4, 14)
+#ggsave("beta_right_STS_group_diff.jpeg", device = "jpeg", width=4, height=2.5)
+
+
+```
+
+
+```{r scatter plot for beta weights - RIGHT superior temporal sulcus cluster, fig.width=5.5, fig.height=3.5}
+
+# Relating beta weights (right) to mentalizing factor score
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_STS, color = group)) + 
+  geom_point(size=2) + 
+  geom_smooth(method=lm) + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-4, 14)
+#ggsave("beta_right_mentalizing_STS_scatter.jpeg", device = "jpeg", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_STS)) + 
+  geom_point(aes(colour = group), size=2) + 
+  geom_smooth(method=lm, colour="darkgrey") + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right cluster - beta weight') + ylim(-4, 14)
+#ggsave("/projects/loliver/SPASD/EA_ImObs_MANUSCRIPT/results/beta_right_mentalizing_STS_scatter.jpeg", device = "jpeg", bg="white", width=4.5, height=2.5)
+
+ggplot(data = matched_prisma_df, aes(x = mentalizing, y = beta_right_STS, color = group)) + 
+  geom_point(size=2) + 
+  stat_ellipse() + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#0073C2FF")) +
+  xlab('Mentalizing factor score') + 
+  ylab('Right superior temporal sulcus') 
+
+
+```
+
+```{r examine distributions}
+# histograms and shapiro-wilk's tests - look pretty good, but all technically sig non-normal aside from beta_right_AI_IF and beta_right_STS
+library(reshape2)
+matched_prisma_long <- melt(matched_prisma_df[,c(1,68,69,82:83,85:88)])
+
+ggplot(data = matched_prisma_long, mapping = aes(x = value)) + 
+  geom_histogram(bins = 10) + facet_wrap(~variable, scales = 'free_x')
+
+sapply(matched_prisma_df[,c(68,69,82:83,85:88)],shapiro.test)
+
+```
+
+```{r brain-behaviour correlations across groups}
+# spearman's correlations between ROI beta weights and sim/ment across groups
+library(Hmisc)
+options(max.print = 99999)
+options(scipen = 999)
+
+matched_prisma_num <- apply(matched_prisma_df[,c(68,69,82:83,85:88)], 2, as.numeric)
+matched_prisma_r <- data.frame(rcorr(matched_prisma_num,type="spearman")$r)
+colnames(matched_prisma_r) <- paste0("rho_", colnames(matched_prisma_r))
+
+matched_prisma_p <- data.frame(rcorr(matched_prisma_num,type="spearman")$P)
+colnames(matched_prisma_p) <- paste0("p_", colnames(matched_prisma_p))
+
+rcorr(matched_prisma_num,type="spearman")$n
+
+# data frame with corrs and p values
+matched_prisma_cor_df <- cbind(matched_prisma_r[3:8,1:2],matched_prisma_p[3:8,1:2])
+matched_prisma_cor_df <- matched_prisma_cor_df[,c(1,3,2,4)]
+
+options(digits=3) 
+print(matched_prisma_cor_df)
+
+p.adjust(c(0.001396,0.0180,0.00023,0.00126,0.00001,0.00001),method="fdr",n=6)
+
+# check pearson's corrs - very similar results
+# rcorr(matched_prisma_num)
+
+```
+
+```{r brain-behavior correlations by group}
+# ASD
+matched_prisma_asd <- apply(matched_prisma_df[matched_prisma_df$group=="ASD",c(68,69,82:83,85:88)], 2, as.numeric)
+asd_r <- data.frame(rcorr(matched_prisma_asd,type="spearman")$r)
+colnames(asd_r) <- paste0("rho_", colnames(asd_r))
+
+asd_p <- data.frame(rcorr(matched_prisma_asd,type="spearman")$P)
+colnames(asd_p) <- paste0("p_", colnames(asd_p))
+
+rcorr(matched_prisma_asd,type="spearman")$n
+
+# data frame with corrs and p values
+asd_cor <- cbind(asd_r[3:8,1:2],asd_p[3:8,1:2])
+asd_cor <- asd_cor[,c(1,3,2,4)]
+
+print(asd_cor)
+
+# SSD
+matched_prisma_ssd <- apply(matched_prisma_df[matched_prisma_df$group=="SSD",c(68,69,82:83,85:88)], 2, as.numeric)
+ssd_r <- data.frame(rcorr(matched_prisma_ssd,type="spearman")$r)
+colnames(ssd_r) <- paste0("rho_", colnames(ssd_r))
+
+ssd_p <- data.frame(rcorr(matched_prisma_ssd,type="spearman")$P)
+colnames(ssd_p) <- paste0("p_", colnames(ssd_p))
+
+rcorr(matched_prisma_ssd,type="spearman")$n
+
+# data frame with corrs and p values
+ssd_cor <- cbind(ssd_r[3:8,1:2],ssd_p[3:8,1:2])
+ssd_cor <- ssd_cor[,c(1,3,2,4)]
+
+print(ssd_cor)
+
+# controls
+matched_prisma_cnt <- apply(matched_prisma_df[matched_prisma_df$group=="Control",c(68,69,82:83,85:88)], 2, as.numeric)
+cnt_r <- data.frame(rcorr(matched_prisma_cnt,type="spearman")$r)
+colnames(cnt_r) <- paste0("rho_", colnames(cnt_r))
+
+cnt_p <- data.frame(rcorr(matched_prisma_cnt,type="spearman")$P)
+colnames(cnt_p) <- paste0("p_", colnames(cnt_p))
+
+rcorr(matched_prisma_cnt,type="spearman")$n
+
+# data frame with corrs and p values
+cnt_cor <- cbind(cnt_r[3:8,1:2],cnt_p[3:8,1:2])
+cnt_cor <- cnt_cor[,c(1,3,2,4)]
+
+print(cnt_cor)
+
+```
+
+
+```{r violin plots, fig.width=4, fig.height=2.5}
+# add violin plots to visualize distribution and overlap in brain and behavior metrics across groups
+sim_viol <- ggplot(matched_prisma_df, aes(y=simulation, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) + #, legend.position="none"
+  xlab('') + ylab('Simulation factor score') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+print(sim_viol)
+
+ment_viol <- ggplot(matched_prisma_df, aes(y=mentalizing, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank()) + #, legend.position="none"
+  xlab('') + ylab('Mentalizing factor score') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+print(ment_viol)
+
+lAI_IF_viol <- ggplot(matched_prisma_df, aes(y=beta_left_AI_IF, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Left IFG/AI - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+rAI_IF_viol <- ggplot(matched_prisma_df, aes(y=beta_right_AI_IF, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Right IFG/AI - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+lTPJ_viol <- ggplot(matched_prisma_df, aes(y=beta_left_TPJ, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Left TPJ - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+rTPJ_viol <- ggplot(matched_prisma_df, aes(y=beta_right_TPJ, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Right TPJ - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+lSTS_viol <- ggplot(matched_prisma_df, aes(y=beta_left_STS, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Left STS - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+rSTS_viol <- ggplot(matched_prisma_df, aes(y=beta_right_STS, x=group, fill=group)) + 
+  geom_violin(alpha=0.4) + 
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.7, alpha=0.8) +
+  theme_bw() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.border = element_blank(),
+        legend.position="none") +
+  xlab('') + ylab('Right STS - beta weight') +
+  scale_fill_manual(values=c("#00AFBB", "#E7B800", "#0073C2FF"),
+                    name="") 
+
+```
+
+```{r arrange violin plots}
+# arrange activation plots 
+library(gridExtra)
+
+grid.arrange(
+    sim_viol, ment_viol,
+    lAI_IF_viol, rAI_IF_viol,
+    lTPJ_viol, rTPJ_viol,
+    lSTS_viol, rSTS_viol,
+    ncol = 4,nrow = 2)
+
+```
+
+```{r Levene's test for heterogeneity}
+library(car)
+
+# Levene's test for homogeneity of variance 
+print("mean_ea")
+leveneTest(mean_ea_z ~ group, data = matched_prisma_df)
+leveneTest(mean_ea_z ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(mean_ea_z ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(mean_ea_z ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("ment")
+leveneTest(simulation ~ group, data = matched_prisma_df)
+leveneTest(simulation ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(simulation ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(simulation ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("sim")
+leveneTest(mentalizing ~ group, data = matched_prisma_df)
+leveneTest(mentalizing ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(mentalizing ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(mentalizing ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("lAI_IF")
+leveneTest(beta_left_AI_IF ~ group, data = matched_prisma_df)
+leveneTest(beta_left_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_left_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_left_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("rAI_IF")
+leveneTest(beta_right_AI_IF ~ group, data = matched_prisma_df)
+leveneTest(beta_right_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_right_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_right_AI_IF ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("lTPJ")
+leveneTest(beta_left_TPJ ~ group, data = matched_prisma_df)
+leveneTest(beta_left_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_left_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_left_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("rTPJ")
+leveneTest(beta_right_TPJ ~ group, data = matched_prisma_df)
+leveneTest(beta_right_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_right_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_right_TPJ ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("lSTS")
+leveneTest(beta_left_STS ~ group, data = matched_prisma_df)
+leveneTest(beta_left_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_left_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_left_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+print("rSTS")
+leveneTest(beta_right_STS ~ group, data = matched_prisma_df)
+leveneTest(beta_right_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="ASD",])
+leveneTest(beta_right_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="SSD",])
+leveneTest(beta_right_STS ~ group, data = matched_prisma_df[matched_prisma_df$group!="Control",])
+
+
+```
+
+```{r Mahalanobis distances for heterogeneity}
+# create new columns for Mahalanobis distances - need to calculate distances based on group centroids (not across groups)
+
+# behav distances by group
+matched_prisma_df$maha_behav <- NA
+
+matched_prisma_df[matched_prisma_df$group=="ASD","maha_behav"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="ASD", c("mean_ea_z","simulation","mentalizing")], colMeans(matched_prisma_df[matched_prisma_df$group=="ASD", c("mean_ea_z","simulation","mentalizing")]), cov(matched_prisma_df[matched_prisma_df$group=="ASD", c("mean_ea_z","simulation","mentalizing")]))
+
+matched_prisma_df[matched_prisma_df$group=="SSD","maha_behav"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="SSD", c("mean_ea_z","simulation","mentalizing")], colMeans(matched_prisma_df[matched_prisma_df$group=="SSD", c("mean_ea_z","simulation","mentalizing")]), cov(matched_prisma_df[matched_prisma_df$group=="SSD", c("mean_ea_z","simulation","mentalizing")]))
+
+matched_prisma_df[matched_prisma_df$group=="Control","maha_behav"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="Control", c("mean_ea_z","simulation","mentalizing")], colMeans(matched_prisma_df[matched_prisma_df$group=="Control", c("mean_ea_z","simulation","mentalizing")]), cov(matched_prisma_df[matched_prisma_df$group=="Control", c("mean_ea_z","simulation","mentalizing")]))
+
+# activity distances by group
+matched_prisma_df$maha_brain <- NA
+
+matched_prisma_df[matched_prisma_df$group=="ASD","maha_brain"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="ASD", 82:88], colMeans(matched_prisma_df[matched_prisma_df$group=="ASD", 82:88]), cov(matched_prisma_df[matched_prisma_df$group=="ASD", 82:88]))
+
+matched_prisma_df[matched_prisma_df$group=="SSD","maha_brain"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="SSD", 82:88], colMeans(matched_prisma_df[matched_prisma_df$group=="SSD", 82:88]), cov(matched_prisma_df[matched_prisma_df$group=="SSD", 82:88]))
+
+matched_prisma_df[matched_prisma_df$group=="Control","maha_brain"] <- mahalanobis(matched_prisma_df[matched_prisma_df$group=="Control", 82:88], colMeans(matched_prisma_df[matched_prisma_df$group=="Control", 82:88]), cov(matched_prisma_df[matched_prisma_df$group=="Control", 82:88]))
+
+
+# Kruskal-Wallis tests to compare distances between groups (use the same as we did for EA comparisons) for EA + sim + ment, and across activity metrics (similar to how Nat grouped metrics based on modality)
+
+# kruskal-test for non normal dists - behav 
+maha_dist_behav_kruskal <- matched_prisma_df %>% kruskal_test(maha_behav ~ group)
+maha_dist_behav_kruskal
+
+# pairwise comparisons
+maha_dist_behav_pwc <- matched_prisma_df %>% 
+  dunn_test(maha_behav ~ group, p.adjust.method = "fdr") 
+maha_dist_behav_pwc
+
+# same for activation across ROIs
+maha_dist_brain_kruskal <- matched_prisma_df %>% kruskal_test(maha_brain ~ group)
+maha_dist_brain_kruskal
+
+# pairwise comparisons
+maha_dist_brain_pwc <- matched_prisma_df %>% 
+  dunn_test(maha_brain ~ group, p.adjust.method = "fdr") 
+maha_dist_brain_pwc
+
+```
+
