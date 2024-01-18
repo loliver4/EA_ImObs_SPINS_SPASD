@@ -29,7 +29,7 @@ Project Organization
     
     
 
-# notebooks:  
+## notebooks:  
 **ImObs_MRIQC_and_QC.Rmd** - quality control script for ImObs data  
 **EA_SPIN_ASD_QC.Rmd** - quality control script for EA data  
 **SPIN_ASD_trans_factor_scores.R** - script to generate the social cognitive mentalizing and simulation factor scores  
@@ -37,8 +37,8 @@ Project Organization
 **EA_participant_characteristics.Rmd** - script characterizing the EA sample and comparing demographics and social cognitive performance  
 **beta_weights_mentalizing_simulation.Rmd** - script with the exploratory transdiagnostic correlations between EA brain activity (beta weights) and social cognitive performance (mentalizing and simulation scores)  
 
-# PALM:  
-## ea_PALM_1_group and imobs_PALM_1_group contain the single group analyses for autism (ASD), SSDs, and TDCs  
+## PALM:  
+### ea_PALM_1_group and imobs_PALM_1_group contain the single group analyses for autism (ASD), SSDs, and TDCs  
 ea_1_group_pmod_cov_age_sex - full task  
 neg_ea_1_group_pmod_cov_age_sex - negative valence  
 pos_ea_1_group_pmod_cov_age_sex - positive valence  
@@ -47,7 +47,7 @@ imobs_1_group_cov_age_sex - full task
 neg_imobs_1_group_cov_age_sex - negative valence  
 pos_imobs_1_group_cov_age_sex - positive valence  
 
-## ea_PALM_2_group and imobs_PALM_2_group contain the two group analyses for ASD vs SSDs, ASD vs TDCs, and SSDs vs TDCs  
+### ea_PALM_2_group and imobs_PALM_2_group contain the two group analyses for ASD vs SSDs, ASD vs TDCs, and SSDs vs TDCs  
 ea_2_group_pmod_cov_age_sex - full task  
 neg_ea_2_group_pmod_cov_age_sex - negative valence  
 pos_ea_2_group_pmod_cov_age_sex - positive valence  
@@ -56,7 +56,7 @@ imobs_2_group_cov_age_sex - full task
 neg_imobs_2_group_cov_age_sex - negative valence  
 pos_imobs_2_group_cov_age_sex - positive valence  
 
-## ea_PALM_transdiag and imobs_PALM_transdiag contain transdiagnostic analyses  
+### ea_PALM_transdiag and imobs_PALM_transdiag contain transdiagnostic analyses  
 ea_transdiag_NONpmod_mentalizing_cov_age_sex - including mentalizing scores   
 ea_transdiag_NONpmod_simulation_cov_age_sex - including simulation scores   
 
