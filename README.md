@@ -29,7 +29,7 @@ Project Organization
     
     
 
-#notebooks:
+#notebooks:#  
 **ImObs_MRIQC_and_QC.Rmd** - quality control script for ImObs data  
 **EA_SPIN_ASD_QC.Rmd** - quality control script for EA data  
 **SPIN_ASD_trans_factor_scores.R** - script to generate the social cognitive mentalizing and simulation factor scores  
