@@ -70,6 +70,6 @@ imobs_transdiag_simulation_cov_age_sex - including simulation scores
 **subids** contains the participant ID lists for each group  
 
 
-### See https://github.com/loliver4/SPINS_ASD_EA_GLM and https://github.com/loliver4/SPINS_ASD_ImObs_GLM for code for running the first-level EA and ImObs GLM analyses.
+#### See https://github.com/loliver4/SPINS_ASD_EA_GLM and https://github.com/loliver4/SPINS_ASD_ImObs_GLM for code for running the first-level EA and ImObs GLM analyses.
 
 
