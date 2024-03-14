@@ -3,7 +3,7 @@ EA_ImObs_SPINS_SPASD
 
 This repo contains code for Empathic Accuracy (EA) and Imitate Observe (ImObs) task fMRI analyses in SPINS and SPIN-ASD samples, including group-based and transdiagnostic analyses across autism, schizophrenia spectrum disorders (SSDs), and typically developing controls (TDCs). Social cognitive performance is also compared and related to task-based brain activity.
 
-Created by Lindsay Oliver (lindsay.oliver@camh.ca) and Iska Moxon-Emre
+Created by and Iska Moxon-Emre and Lindsay Oliver (lindsay.oliver@camh.ca)
 
 
 Project Organization
